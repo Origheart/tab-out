@@ -1445,23 +1445,6 @@ document.addEventListener('click', async (e) => {
     return;
   }
 
-  if (action === 'open-bookmark-folder') {
-    const folderId = actionEl.dataset.bmFolderId;
-    if (!folderId) return;
-    try {
-      const children = await chrome.bookmarks.getChildren(folderId);
-      const urls = children.filter(c => c.url).map(c => c.url);
-      for (const url of urls) {
-        chrome.tabs.create({ url, active: false });
-      }
-      showToast(`Opened ${urls.length} bookmark${urls.length !== 1 ? 's' : ''}`);
-    } catch (err) {
-      console.warn('[tab-out] Could not open folder:', err);
-      showToast('Failed to open bookmarks');
-    }
-    return;
-  }
-
   if (action === 'delete-bookmark') {
     const bmId = actionEl.dataset.bmId;
     if (!bmId) return;
@@ -1528,11 +1511,11 @@ document.addEventListener('input', async (e) => {
 
 
 /* ----------------------------------------------------------------
-   BOOKMARKS — Chrome Bookmarks Integration
+   BOOKMARKS — App-Grid Layout
 
-   Reads and displays the user's Chrome bookmarks directly from
-   the chrome.bookmarks API. Folders are rendered as cards matching
-   the domain card design, with bookmark items as clickable chips.
+   All bookmarks flattened into individual tiles displayed in a
+   responsive grid, like app icons on a home screen. Supports
+   drag-and-drop reordering with custom order persisted to storage.
    ---------------------------------------------------------------- */
 
 /**
@@ -1552,7 +1535,7 @@ async function fetchBookmarkTree() {
 /**
  * collectBookmarks(nodes, result)
  *
- * Recursively collects all bookmark URLs from a node list.
+ * Recursively collects all bookmark URLs from a node list into result.
  */
 function collectBookmarks(nodes, result) {
   if (!nodes) return;
@@ -1567,128 +1550,178 @@ function collectBookmarks(nodes, result) {
 }
 
 /**
- * getBookmarkFolders()
+ * getAllBookmarks()
  *
- * Returns top-level bookmark folders (Bookmark Bar, Other Bookmarks, etc.)
- * each with their recursively-collected bookmark items.
+ * Flattens the entire bookmark tree into a single array of { id, title, url },
+ * then applies any user-defined custom order from chrome.storage.local.
  */
-async function getBookmarkFolders() {
+async function getAllBookmarks() {
   const tree = await fetchBookmarkTree();
   if (!tree || !tree[0] || !tree[0].children) return [];
 
-  const folders = [];
+  const all = [];
   for (const node of tree[0].children) {
-    if (node.children) {
-      const items = [];
-      collectBookmarks(node.children, items);
-      folders.push({ id: node.id, title: node.title || 'Bookmarks', items });
-    }
+    if (node.children) collectBookmarks(node.children, all);
   }
-  return folders;
+
+  // Apply custom drag-reorder from storage
+  const { bookmarkOrder = [] } = await chrome.storage.local.get('bookmarkOrder');
+  if (bookmarkOrder.length > 0) {
+    const idx = new Map(bookmarkOrder.map((id, i) => [id, i]));
+    const ordered = all.filter(b => idx.has(b.id)).sort((a, b) => idx.get(a.id) - idx.get(b.id));
+    const unordered = all.filter(b => !idx.has(b.id));
+    return [...ordered, ...unordered];
+  }
+
+  return all;
 }
 
 /**
- * searchBookmarksInFolders(folders, query)
+ * saveBookmarkOrder(ids)
  *
- * Filters folders to only items matching the query (case-insensitive).
+ * Persists the current tile order to chrome.storage.local.
  */
-function searchBookmarksInFolders(folders, query) {
-  if (!query || query.length < 2) return folders;
-  const q = query.toLowerCase();
-  return folders.map(f => ({
-    ...f,
-    items: f.items.filter(i =>
-      (i.title || '').toLowerCase().includes(q) || (i.url || '').toLowerCase().includes(q)
-    ),
-  })).filter(f => f.items.length > 0);
+async function saveBookmarkOrder(ids) {
+  await chrome.storage.local.set({ bookmarkOrder: ids });
 }
 
 /**
  * renderBookmarks()
  *
- * Main render function — fetches bookmark data, optionally filters
- * by search query, and renders folder cards with bookmark chips.
+ * Main render — fetches all bookmarks, filters by search query,
+ * renders as a grid of draggable tiles.
  */
 async function renderBookmarks() {
   const container = document.getElementById('bookmarksContainer');
   const empty = document.getElementById('bookmarksEmpty');
   const searchInput = document.getElementById('bookmarkSearch');
-  const countEl = document.getElementById('bookmarkCount');
   if (!container) return;
 
   const query = searchInput ? searchInput.value.trim() : '';
 
   try {
-    let folders = await getBookmarkFolders();
+    let bookmarks = await getAllBookmarks();
+
     if (query.length >= 2) {
-      folders = searchBookmarksInFolders(folders, query);
+      const q = query.toLowerCase();
+      bookmarks = bookmarks.filter(b =>
+        (b.title || '').toLowerCase().includes(q) || (b.url || '').toLowerCase().includes(q)
+      );
     }
 
-    const totalItems = folders.reduce((sum, f) => sum + f.items.length, 0);
-    if (countEl) countEl.textContent = totalItems > 0 ? String(totalItems) : '';
-
-    if (folders.length === 0 || totalItems === 0) {
+    if (bookmarks.length === 0) {
       container.innerHTML = '';
       if (empty) empty.style.display = 'block';
       return;
     }
 
     if (empty) empty.style.display = 'none';
-    container.innerHTML = folders.map(f => renderBookmarkFolder(f)).join('');
+    container.innerHTML = bookmarks.map(b => renderBookmarkTile(b)).join('');
   } catch (err) {
     console.warn('[tab-out] Could not render bookmarks:', err);
     container.innerHTML = '<div style="padding:24px;text-align:center;color:var(--muted);font-size:13px;">Could not load bookmarks.</div>';
   }
 }
 
-function renderBookmarkFolder(folder) {
-  const itemCount = folder.items.length;
-  const chips = folder.items.map(item => renderBookmarkItem(item)).join('');
-
-  return `
-    <div class="mission-card bookmark-folder-card" data-bm-folder-id="bm-${folder.id}">
-      <div class="status-bar" style="background:var(--accent-slate);"></div>
-      <div class="mission-content">
-        <div class="mission-top">
-          <span class="mission-name">${folder.title}</span>
-          <span class="open-tabs-badge" style="color:var(--accent-slate);background:rgba(90,107,122,0.08);">
-            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" width="10" height="10"><path stroke-linecap="round" stroke-linejoin="round" d="M17.593 3.322c1.1.128 1.907 1.077 1.907 2.185V21L12 17.25 4.5 21V5.507c0-1.108.806-2.057 1.907-2.185a48.507 48.507 0 0 1 11.186 0Z" /></svg>
-            ${itemCount} bookmark${itemCount !== 1 ? 's' : ''}
-          </span>
-        </div>
-        <div class="mission-pages bookmark-chips">${chips}</div>
-        <div class="actions">
-          <button class="action-btn save-tabs" data-action="open-bookmark-folder" data-bm-folder-id="${folder.id}">
-            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" width="12" height="12"><path stroke-linecap="round" stroke-linejoin="round" d="M4.5 19.5l15-15m0 0H8.25m11.25 0v11.25" /></svg>
-            Open all ${itemCount}
-          </button>
-        </div>
-      </div>
-      <div class="mission-meta">
-        <div class="mission-page-count">${itemCount}</div>
-        <div class="mission-page-label">bookmarks</div>
-      </div>
-    </div>`;
-}
-
-function renderBookmarkItem(item) {
+function renderBookmarkTile(bm) {
   let domain = '';
-  try { domain = new URL(item.url).hostname; } catch {}
-  const faviconUrl = domain ? `https://www.google.com/s2/favicons?domain=${domain}&sz=16` : '';
-  const safeUrl = (item.url || '').replace(/"/g, '&quot;');
-  const safeTitle = (item.title || '').replace(/"/g, '&quot;');
+  try { domain = new URL(bm.url).hostname; } catch {}
+  const faviconUrl = domain ? `https://www.google.com/s2/favicons?domain=${domain}&sz=32` : '';
+  const safeUrl = (bm.url || '').replace(/"/g, '&quot;');
+  const safeTitle = (bm.title || '').replace(/"/g, '&quot;');
+  const shortTitle = (bm.title || bm.url).length > 22 ? (bm.title || bm.url).substring(0, 20) + '…' : (bm.title || bm.url);
 
-  return `<div class="page-chip clickable" data-action="open-bookmark" data-bm-url="${safeUrl}" title="${safeTitle}">
-    ${faviconUrl ? `<img class="chip-favicon" src="${faviconUrl}" alt="" onerror="this.style.display='none'">` : ''}
-    <span class="chip-text">${safeTitle}</span>
-    <span class="bm-url">${domain || item.url}</span>
-    <div class="chip-actions">
-      <button class="chip-action chip-delete" data-action="delete-bookmark" data-bm-id="${item.id}" title="Delete bookmark">
-        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" width="14" height="14"><path stroke-linecap="round" stroke-linejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0" /></svg>
-      </button>
+  return `<div class="bookmark-tile" draggable="true" data-bm-id="${bm.id}" data-bm-url="${safeUrl}" title="${safeTitle}">
+    <div class="bm-tile-icon">
+      ${faviconUrl ? `<img src="${faviconUrl}" alt="" onerror="this.parentElement.classList.add('no-favicon')">` : ''}
     </div>
+    <div class="bm-tile-name">${shortTitle}</div>
+    <button class="bm-tile-delete" data-action="delete-bookmark" data-bm-id="${bm.id}" title="Delete bookmark">
+      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" width="12" height="12"><path stroke-linecap="round" stroke-linejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0" /></svg>
+    </button>
   </div>`;
 }
+
+
+/* ----------------------------------------------------------------
+   BOOKMARKS — Drag-and-Drop Reorder
+
+   Uses HTML5 Drag & Drop API with event delegation.
+   Order is persisted to chrome.storage.local on each drop.
+   ---------------------------------------------------------------- */
+
+let dragCounter = 0;
+
+document.addEventListener('dragstart', (e) => {
+  const tile = e.target.closest('.bookmark-tile');
+  if (!tile) return;
+  e.dataTransfer.setData('text/plain', tile.dataset.bmId);
+  e.dataTransfer.effectAllowed = 'move';
+  tile.classList.add('dragging');
+});
+
+document.addEventListener('dragover', (e) => {
+  const tile = e.target.closest('.bookmark-tile');
+  if (!tile) return;
+  e.preventDefault();
+  e.dataTransfer.dropEffect = 'move';
+  const grid = document.getElementById('bookmarksContainer');
+  if (!grid) return;
+
+  grid.querySelectorAll('.bookmark-tile').forEach(t => t.classList.remove('drag-over'));
+
+  const rect = tile.getBoundingClientRect();
+  const midY = rect.top + rect.height / 2;
+  const midX = rect.left + rect.width / 2;
+  const cx = e.clientX, cy = e.clientY;
+
+  // Determine which side to insert based on cursor position
+  const isAfter = (cx > midX) || (Math.abs(cx - midX) < 10 && cy > midY);
+  if (isAfter) {
+    tile.classList.add('drag-over-after');
+  } else {
+    tile.classList.add('drag-over-before');
+  }
+});
+
+document.addEventListener('drop', async (e) => {
+  const tile = e.target.closest('.bookmark-tile');
+  if (!tile) return;
+  e.preventDefault();
+
+  const draggedId = e.dataTransfer.getData('text/plain');
+  const targetId = tile.dataset.bmId;
+  if (!draggedId || draggedId === targetId) return;
+
+  const grid = document.getElementById('bookmarksContainer');
+  if (!grid) return;
+
+  const draggedTile = grid.querySelector(`[data-bm-id="${draggedId}"]`);
+  if (!draggedTile) return;
+
+  const rect = tile.getBoundingClientRect();
+  const midX = rect.left + rect.width / 2;
+  const isAfter = e.clientX > midX || (Math.abs(e.clientX - midX) < 10 && e.clientY > rect.top + rect.height / 2);
+
+  if (isAfter) {
+    tile.parentNode.insertBefore(draggedTile, tile.nextSibling);
+  } else {
+    tile.parentNode.insertBefore(draggedTile, tile);
+  }
+
+  // Save the new order
+  const newOrder = [...grid.querySelectorAll('.bookmark-tile')].map(t => t.dataset.bmId);
+  await saveBookmarkOrder(newOrder);
+});
+
+document.addEventListener('dragend', (e) => {
+  const tile = e.target.closest('.bookmark-tile');
+  if (tile) tile.classList.remove('dragging');
+  document.querySelectorAll('.bookmark-tile').forEach(t => {
+    t.classList.remove('drag-over', 'drag-over-before', 'drag-over-after');
+  });
+  dragCounter = 0;
+});
 
 
 /* ----------------------------------------------------------------
