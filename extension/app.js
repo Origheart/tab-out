@@ -1166,6 +1166,9 @@ async function renderStaticDashboard() {
 
   // --- Render "Saved for Later" column ---
   await renderDeferredColumn();
+
+  // --- Render bookmarks section ---
+  await renderBookmarks();
 }
 
 async function renderDashboard() {
@@ -1431,6 +1434,48 @@ document.addEventListener('click', async (e) => {
     showToast('All tabs closed. Fresh start.');
     return;
   }
+
+  // ---- Bookmark actions ----
+  if (action === 'open-bookmark') {
+    const url = actionEl.dataset.bmUrl;
+    if (url) {
+      chrome.tabs.create({ url, active: false });
+      showToast('Opened bookmark');
+    }
+    return;
+  }
+
+  if (action === 'open-bookmark-folder') {
+    const folderId = actionEl.dataset.bmFolderId;
+    if (!folderId) return;
+    try {
+      const children = await chrome.bookmarks.getChildren(folderId);
+      const urls = children.filter(c => c.url).map(c => c.url);
+      for (const url of urls) {
+        chrome.tabs.create({ url, active: false });
+      }
+      showToast(`Opened ${urls.length} bookmark${urls.length !== 1 ? 's' : ''}`);
+    } catch (err) {
+      console.warn('[tab-out] Could not open folder:', err);
+      showToast('Failed to open bookmarks');
+    }
+    return;
+  }
+
+  if (action === 'delete-bookmark') {
+    const bmId = actionEl.dataset.bmId;
+    if (!bmId) return;
+    e.stopPropagation();
+    try {
+      await chrome.bookmarks.remove(bmId);
+      showToast('Bookmark deleted');
+      await renderBookmarks();
+    } catch (err) {
+      console.warn('[tab-out] Could not delete bookmark:', err);
+      showToast('Failed to delete bookmark');
+    }
+    return;
+  }
 });
 
 // ---- Archive toggle — expand/collapse the archive section ----
@@ -1472,54 +1517,6 @@ document.addEventListener('input', async (e) => {
       || '<div style="font-size:12px;color:var(--muted);padding:8px 0">No results</div>';
   } catch (err) {
     console.warn('[tab-out] Archive search failed:', err);
-  }
-});
-
-
-/* ----------------------------------------------------------------
-   BOOKMARKS — Event Handlers
-   ---------------------------------------------------------------- */
-
-// ---- Toggle bookmarks section ----
-document.addEventListener('click', async (e) => {
-  const actionEl = e.target.closest('[data-action]');
-  if (!actionEl) return;
-  const action = actionEl.dataset.action;
-
-  if (action === 'toggle-bookmarks') {
-    const section = document.getElementById('bookmarksSection');
-    if (!section) return;
-    const isHidden = section.style.display === 'none';
-    section.style.display = isHidden ? 'block' : 'none';
-    actionEl.classList.toggle('active', isHidden);
-    if (isHidden) await renderBookmarks();
-    return;
-  }
-
-  if (action === 'open-bookmark') {
-    const url = actionEl.dataset.bmUrl;
-    if (url) {
-      chrome.tabs.create({ url, active: false });
-      showToast('Opened bookmark');
-    }
-    return;
-  }
-
-  if (action === 'open-bookmark-folder') {
-    const folderId = actionEl.dataset.bmFolderId;
-    if (!folderId) return;
-    try {
-      const children = await chrome.bookmarks.getChildren(folderId);
-      const urls = children.filter(c => c.url).map(c => c.url);
-      for (const url of urls) {
-        chrome.tabs.create({ url, active: false });
-      }
-      showToast(`Opened ${urls.length} bookmark${urls.length !== 1 ? 's' : ''}`);
-    } catch (err) {
-      console.warn('[tab-out] Could not open folder:', err);
-      showToast('Failed to open bookmarks');
-    }
-    return;
   }
 });
 
@@ -1685,6 +1682,11 @@ function renderBookmarkItem(item) {
     ${faviconUrl ? `<img class="chip-favicon" src="${faviconUrl}" alt="" onerror="this.style.display='none'">` : ''}
     <span class="chip-text">${safeTitle}</span>
     <span class="bm-url">${domain || item.url}</span>
+    <div class="chip-actions">
+      <button class="chip-action chip-delete" data-action="delete-bookmark" data-bm-id="${item.id}" title="Delete bookmark">
+        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" width="14" height="14"><path stroke-linecap="round" stroke-linejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0" /></svg>
+      </button>
+    </div>
   </div>`;
 }
 

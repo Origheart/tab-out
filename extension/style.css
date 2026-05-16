@@ -451,6 +451,11 @@ header {
   background: rgba(179, 90, 90, 0.08);
 }
 
+.chip-delete:hover {
+  color: var(--status-abandoned);
+  background: rgba(179, 90, 90, 0.08);
+}
+
 .page-chip.clickable {
   cursor: pointer;
   transition: background 0.15s ease;
@@ -1162,67 +1167,9 @@ footer { animation: fadeUp 0.5s ease 0.65s both; }
    BOOKMARKS — Section Styles
    ================================================================ */
 
-/* ---- Header toggle button ---- */
-.header-right {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-shrink: 0;
-}
-
-.header-btn {
-  font-family: 'DM Sans', sans-serif;
-  font-size: 12px;
-  font-weight: 500;
-  color: var(--muted);
-  background: none;
-  border: 1px solid var(--warm-gray);
-  border-radius: 6px;
-  padding: 6px 14px;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  transition: all 0.2s;
-  white-space: nowrap;
-}
-
-.header-btn:hover {
-  color: var(--ink);
-  border-color: var(--ink);
-  background: var(--card-bg);
-}
-
-.header-btn.active {
-  color: var(--accent-slate);
-  border-color: var(--accent-slate);
-  background: rgba(90, 107, 122, 0.06);
-}
-
-.header-btn svg {
-  opacity: 0.7;
-}
-
-.header-btn-count {
-  font-size: 10px;
-  font-weight: 600;
-  color: var(--accent-slate);
-  background: rgba(90, 107, 122, 0.1);
-  padding: 1px 6px;
-  border-radius: 3px;
-  min-width: 18px;
-  text-align: center;
-}
-
-/* ---- Bookmarks section ---- */
-.bookmarks-section {
-  margin-top: 40px;
-  padding-top: 8px;
-  animation: fadeUp 0.35s ease both;
-}
-
-.bookmarks-section .section-header {
-  margin-bottom: 20px;
+/* ---- Bookmarks section — same level as Open Tabs ---- */
+#bookmarksSection {
+  margin-top: 48px;
 }
 
 /* ---- Bookmark folder card ---- */
