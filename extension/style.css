@@ -1171,8 +1171,8 @@ footer { animation: fadeUp 0.5s ease 0.65s both; }
 .bookmark-grid {
   display: flex;
   flex-wrap: wrap;
-  gap: 12px;
-  margin-bottom: 40px;
+  gap: 20px;
+  margin-bottom: 48px;
 }
 
 /* ---- Individual bookmark tile (app-icon style) ---- */
@@ -1180,10 +1180,10 @@ footer { animation: fadeUp 0.5s ease 0.65s both; }
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 6px;
-  width: 96px;
-  padding: 10px 6px 8px;
-  border-radius: 10px;
+  gap: 8px;
+  width: 120px;
+  padding: 14px 10px 10px;
+  border-radius: 12px;
   background: var(--card-bg);
   border: 1px solid var(--warm-gray);
   cursor: grab;
@@ -1193,9 +1193,13 @@ footer { animation: fadeUp 0.5s ease 0.65s both; }
 }
 
 .bookmark-tile:hover {
-  box-shadow: 0 4px 16px var(--shadow);
-  transform: translateY(-2px);
+  box-shadow: 0 4px 20px var(--shadow);
+  transform: translateY(-3px);
   border-color: rgba(90, 107, 122, 0.2);
+}
+
+.bookmark-tile:active {
+  cursor: grabbing;
 }
 
 .bookmark-tile.dragging {
@@ -1203,36 +1207,37 @@ footer { animation: fadeUp 0.5s ease 0.65s both; }
   transform: scale(0.92);
 }
 
-/* Drop indicator — blue line on the side the tile will be inserted */
+/* Drop indicator */
 .bookmark-tile.drag-over-before::after,
 .bookmark-tile.drag-over-after::after {
   content: '';
   position: absolute;
-  top: 4px;
-  bottom: 4px;
+  top: 6px;
+  bottom: 6px;
   width: 3px;
   border-radius: 2px;
   background: var(--accent-slate);
-  opacity: 0.6;
+  opacity: 0.7;
 }
-.bookmark-tile.drag-over-before::after { left: -3px; }
-.bookmark-tile.drag-over-after::after { right: -3px; }
+.bookmark-tile.drag-over-before::after { left: -4px; }
+.bookmark-tile.drag-over-after::after { right: -4px; }
 
-/* ---- Tile icon (favicon) ---- */
+/* ---- Tile icon ---- */
 .bm-tile-icon {
-  width: 48px;
-  height: 48px;
-  border-radius: 12px;
+  width: 56px;
+  height: 56px;
+  border-radius: 14px;
   display: flex;
   align-items: center;
   justify-content: center;
   background: rgba(90, 107, 122, 0.06);
   overflow: hidden;
+  flex-shrink: 0;
 }
 
 .bm-tile-icon img {
-  width: 32px;
-  height: 32px;
+  width: 36px;
+  height: 36px;
   object-fit: contain;
 }
 
@@ -1242,11 +1247,24 @@ footer { animation: fadeUp 0.5s ease 0.65s both; }
 
 /* ---- Tile name ---- */
 .bm-tile-name {
-  font-size: 10px;
+  font-size: 12px;
+  font-weight: 500;
   color: var(--ink);
   text-align: center;
-  line-height: 1.3;
-  max-width: 84px;
+  line-height: 1.35;
+  width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ---- Tile domain ---- */
+.bm-tile-domain {
+  font-size: 10px;
+  color: var(--muted);
+  text-align: center;
+  line-height: 1.2;
+  width: 100%;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -1255,10 +1273,10 @@ footer { animation: fadeUp 0.5s ease 0.65s both; }
 /* ---- Delete button (appears on hover) ---- */
 .bm-tile-delete {
   position: absolute;
-  top: -4px;
-  right: -4px;
-  width: 22px;
-  height: 22px;
+  top: -6px;
+  right: -6px;
+  width: 24px;
+  height: 24px;
   border-radius: 50%;
   border: 1px solid var(--warm-gray);
   background: var(--card-bg);

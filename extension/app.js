@@ -1437,10 +1437,10 @@ document.addEventListener('click', async (e) => {
 
   // ---- Bookmark actions ----
   if (action === 'open-bookmark') {
+    if (bmDrag) { bmDrag = false; return; }
     const url = actionEl.dataset.bmUrl;
     if (url) {
-      chrome.tabs.create({ url, active: false });
-      showToast('Opened bookmark');
+      chrome.tabs.create({ url, active: true });
     }
     return;
   }
@@ -1624,21 +1624,26 @@ async function renderBookmarks() {
 }
 
 function renderBookmarkTile(bm) {
-  let domain = '';
-  try { domain = new URL(bm.url).hostname; } catch {}
+  let domain = '', hostDisplay = '';
+  try {
+    const u = new URL(bm.url);
+    domain = u.hostname;
+    hostDisplay = domain.replace(/^www\./, '');
+  } catch {}
   const faviconUrl = domain ? `https://www.google.com/s2/favicons?domain=${domain}&sz=32` : '';
   const safeUrl = (bm.url || '').replace(/"/g, '&quot;');
   const safeTitle = (bm.title || '').replace(/"/g, '&quot;');
-  const shortTitle = (bm.title || bm.url).length > 22 ? (bm.title || bm.url).substring(0, 20) + '…' : (bm.title || bm.url);
+  const shortTitle = (bm.title || '').length > 28 ? (bm.title || '').substring(0, 26) + '…' : (bm.title || '');
 
   return `<div class="bookmark-tile" draggable="true" data-bm-id="${bm.id}" data-bm-url="${safeUrl}" title="${safeTitle}">
-    <div class="bm-tile-icon">
-      ${faviconUrl ? `<img src="${faviconUrl}" alt="" onerror="this.parentElement.classList.add('no-favicon')">` : ''}
-    </div>
-    <div class="bm-tile-name">${shortTitle}</div>
     <button class="bm-tile-delete" data-action="delete-bookmark" data-bm-id="${bm.id}" title="Delete bookmark">
       <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" width="12" height="12"><path stroke-linecap="round" stroke-linejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0" /></svg>
     </button>
+    <div class="bm-tile-icon">
+      ${faviconUrl ? `<img src="${faviconUrl}" alt="" onerror="this.parentElement.classList.add('no-favicon')">` : ''}
+    </div>
+    <div class="bm-tile-name">${shortTitle || bm.url}</div>
+    <div class="bm-tile-domain">${hostDisplay}</div>
   </div>`;
 }
 
@@ -1650,14 +1655,23 @@ function renderBookmarkTile(bm) {
    Order is persisted to chrome.storage.local on each drop.
    ---------------------------------------------------------------- */
 
-let dragCounter = 0;
+let bmDrag = false;
 
 document.addEventListener('dragstart', (e) => {
   const tile = e.target.closest('.bookmark-tile');
   if (!tile) return;
+  bmDrag = true;
   e.dataTransfer.setData('text/plain', tile.dataset.bmId);
   e.dataTransfer.effectAllowed = 'move';
   tile.classList.add('dragging');
+});
+
+document.addEventListener('dragend', () => {
+  // Reset flag after a tick so any queued click sees it
+  setTimeout(() => { bmDrag = false; }, 0);
+  document.querySelectorAll('.bookmark-tile').forEach(t => {
+    t.classList.remove('dragging', 'drag-over', 'drag-over-before', 'drag-over-after');
+  });
 });
 
 document.addEventListener('dragover', (e) => {
@@ -1712,15 +1726,6 @@ document.addEventListener('drop', async (e) => {
   // Save the new order
   const newOrder = [...grid.querySelectorAll('.bookmark-tile')].map(t => t.dataset.bmId);
   await saveBookmarkOrder(newOrder);
-});
-
-document.addEventListener('dragend', (e) => {
-  const tile = e.target.closest('.bookmark-tile');
-  if (tile) tile.classList.remove('dragging');
-  document.querySelectorAll('.bookmark-tile').forEach(t => {
-    t.classList.remove('drag-over', 'drag-over-before', 'drag-over-after');
-  });
-  dragCounter = 0;
 });
 
 
