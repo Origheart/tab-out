@@ -101,7 +101,10 @@
        Bookmark folders are rendered as cards in the missions grid
        ================================================================ -->
   <div class="active-section" id="bookmarksSection">
-    <div class="section-header">
+    <div class="section-header section-header-clickable" id="bookmarksSectionToggle">
+      <button class="archive-toggle" id="bookmarksToggleBtn">
+        <svg class="archive-chevron" id="bookmarksChevron" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="m19.5 8.25-7.5 7.5-7.5-7.5" /></svg>
+      </button>
       <h2>Bookmarks</h2>
       <div class="section-line"></div>
       <input type="text" class="bookmark-search" id="bookmarkSearch" placeholder="Search bookmarks...">

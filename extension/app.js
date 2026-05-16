@@ -1595,7 +1595,14 @@ async function renderBookmarks() {
   const container = document.getElementById('bookmarksContainer');
   const empty = document.getElementById('bookmarksEmpty');
   const searchInput = document.getElementById('bookmarkSearch');
+  const section = document.getElementById('bookmarksSection');
   if (!container) return;
+
+  // Apply collapsed state from storage
+  const { bookmarksCollapsed = false } = await chrome.storage.local.get('bookmarksCollapsed');
+  if (section) {
+    section.classList.toggle('collapsed', bookmarksCollapsed);
+  }
 
   const query = searchInput ? searchInput.value.trim() : '';
 
@@ -1647,6 +1654,33 @@ function renderBookmarkTile(bm) {
     </div>
   </div>`;
 }
+
+
+/* ----------------------------------------------------------------
+   BOOKMARKS — Section Toggle (Collapse / Expand)
+
+   Click the Bookmarks header or chevron to show/hide the grid.
+   State is persisted to chrome.storage.local.
+   ---------------------------------------------------------------- */
+
+document.addEventListener('click', async (e) => {
+  const toggle = e.target.closest('#bookmarksSectionToggle, #bookmarksToggleBtn, #bookmarksChevron');
+  if (!toggle) return;
+
+  const section = document.getElementById('bookmarksSection');
+  if (!section) return;
+
+  const isCollapsed = section.classList.toggle('collapsed');
+  await chrome.storage.local.set({ bookmarksCollapsed: isCollapsed });
+
+  // If expanding for the first time, ensure bookmarks are rendered
+  if (!isCollapsed) {
+    const container = document.getElementById('bookmarksContainer');
+    if (container && container.children.length === 0) {
+      await renderBookmarks();
+    }
+  }
+});
 
 
 /* ----------------------------------------------------------------

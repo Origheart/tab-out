@@ -1167,6 +1167,29 @@ footer { animation: fadeUp 0.5s ease 0.65s both; }
   margin-top: 48px;
 }
 
+/* Collapsed state — hide grid, rotate chevron */
+#bookmarksSection .bookmark-grid,
+#bookmarksSection .bookmarks-empty {
+  transition: opacity 0.2s;
+}
+
+#bookmarksSection.collapsed .bookmark-grid,
+#bookmarksSection.collapsed .bookmarks-empty {
+  display: none;
+}
+
+#bookmarksSection.collapsed #bookmarkSearch {
+  display: none;
+}
+
+#bookmarksSection.collapsed .archive-chevron {
+  transform: rotate(-90deg);
+}
+
+.section-header-clickable {
+  cursor: pointer;
+}
+
 /* ---- Bookmark tile grid ---- */
 .bookmark-grid {
   display: flex;
