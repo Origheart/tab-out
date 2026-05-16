@@ -1171,29 +1171,28 @@ footer { animation: fadeUp 0.5s ease 0.65s both; }
 .bookmark-grid {
   display: flex;
   flex-wrap: wrap;
-  gap: 20px;
+  gap: 24px;
   margin-bottom: 48px;
 }
 
-/* ---- Individual bookmark tile (app-icon style) ---- */
+/* ---- Individual bookmark tile ---- */
 .bookmark-tile {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 8px;
-  width: 120px;
-  padding: 14px 10px 10px;
-  border-radius: 12px;
+  width: 150px;
+  padding: 16px 12px 12px;
+  border-radius: 14px;
   background: var(--card-bg);
   border: 1px solid var(--warm-gray);
   cursor: grab;
   position: relative;
   transition: box-shadow 0.2s, transform 0.2s, opacity 0.2s;
   user-select: none;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
 }
 
 .bookmark-tile:hover {
-  box-shadow: 0 4px 20px var(--shadow);
+  box-shadow: 0 6px 24px var(--shadow);
   transform: translateY(-3px);
   border-color: rgba(90, 107, 122, 0.2);
 }
@@ -1212,32 +1211,47 @@ footer { animation: fadeUp 0.5s ease 0.65s both; }
 .bookmark-tile.drag-over-after::after {
   content: '';
   position: absolute;
-  top: 6px;
-  bottom: 6px;
+  top: 8px;
+  bottom: 8px;
   width: 3px;
   border-radius: 2px;
   background: var(--accent-slate);
   opacity: 0.7;
 }
-.bookmark-tile.drag-over-before::after { left: -4px; }
-.bookmark-tile.drag-over-after::after { right: -4px; }
+.bookmark-tile.drag-over-before::after { left: -5px; }
+.bookmark-tile.drag-over-after::after { right: -5px; }
+
+/* ---- Click area inside tile ---- */
+.bm-tile-click {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  width: 100%;
+}
 
 /* ---- Tile icon ---- */
 .bm-tile-icon {
-  width: 56px;
-  height: 56px;
-  border-radius: 14px;
+  width: 64px;
+  height: 64px;
+  border-radius: 16px;
   display: flex;
   align-items: center;
   justify-content: center;
   background: rgba(90, 107, 122, 0.06);
   overflow: hidden;
   flex-shrink: 0;
+  transition: transform 0.15s;
+}
+
+.bm-tile-click:active .bm-tile-icon {
+  transform: scale(0.92);
 }
 
 .bm-tile-icon img {
-  width: 36px;
-  height: 36px;
+  width: 40px;
+  height: 40px;
   object-fit: contain;
 }
 
@@ -1247,11 +1261,11 @@ footer { animation: fadeUp 0.5s ease 0.65s both; }
 
 /* ---- Tile name ---- */
 .bm-tile-name {
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 500;
   color: var(--ink);
   text-align: center;
-  line-height: 1.35;
+  line-height: 1.4;
   width: 100%;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -1260,7 +1274,7 @@ footer { animation: fadeUp 0.5s ease 0.65s both; }
 
 /* ---- Tile domain ---- */
 .bm-tile-domain {
-  font-size: 10px;
+  font-size: 11px;
   color: var(--muted);
   text-align: center;
   line-height: 1.2;
@@ -1275,8 +1289,8 @@ footer { animation: fadeUp 0.5s ease 0.65s both; }
   position: absolute;
   top: -6px;
   right: -6px;
-  width: 24px;
-  height: 24px;
+  width: 26px;
+  height: 26px;
   border-radius: 50%;
   border: 1px solid var(--warm-gray);
   background: var(--card-bg);
@@ -1288,6 +1302,7 @@ footer { animation: fadeUp 0.5s ease 0.65s both; }
   opacity: 0;
   transition: opacity 0.15s, color 0.15s, background 0.15s;
   z-index: 2;
+  padding: 0;
 }
 
 .bookmark-tile:hover .bm-tile-delete {
