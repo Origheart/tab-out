@@ -26,6 +26,15 @@
       <!-- "Friday, April 4, 2026" — written by getDateDisplay() in app.js -->
       <div class="date" id="dateDisplay"></div>
     </div>
+    <div class="header-right">
+      <button class="header-btn" id="bookmarkToggle" data-action="toggle-bookmarks">
+        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" width="16" height="16">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M17.593 3.322c1.1.128 1.907 1.077 1.907 2.185V21L12 17.25 4.5 21V5.507c0-1.108.806-2.057 1.907-2.185a48.507 48.507 0 0 1 11.186 0Z" />
+        </svg>
+        <span>Bookmarks</span>
+        <span class="header-btn-count" id="bookmarkCount"></span>
+      </button>
+    </div>
   </header>
 
   <!-- ================================================================
@@ -95,6 +104,22 @@
     </div>
 
   </div><!-- end .dashboard-columns -->
+
+  <!-- ================================================================
+       BOOKMARKS SECTION — collapsible, shows Chrome bookmark folders
+       Hidden by default; toggled via the Bookmarks header button
+       ================================================================ -->
+  <div class="bookmarks-section" id="bookmarksSection" style="display:none">
+    <div class="section-header">
+      <h2>Bookmarks</h2>
+      <div class="section-line"></div>
+      <input type="text" class="bookmark-search" id="bookmarkSearch" placeholder="Search bookmarks...">
+    </div>
+    <div id="bookmarksContainer"></div>
+    <div class="bookmarks-empty" id="bookmarksEmpty" style="display:none">
+      No bookmarks found.
+    </div>
+  </div>
 
   <!-- ================================================================
        FOOTER — global stats + refresh control

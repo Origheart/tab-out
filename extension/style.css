@@ -1156,3 +1156,159 @@ footer { animation: fadeUp 0.5s ease 0.65s both; }
   opacity: 0.6;
   flex-shrink: 0;
 }
+
+
+/* ================================================================
+   BOOKMARKS — Section Styles
+   ================================================================ */
+
+/* ---- Header toggle button ---- */
+.header-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.header-btn {
+  font-family: 'DM Sans', sans-serif;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--muted);
+  background: none;
+  border: 1px solid var(--warm-gray);
+  border-radius: 6px;
+  padding: 6px 14px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  transition: all 0.2s;
+  white-space: nowrap;
+}
+
+.header-btn:hover {
+  color: var(--ink);
+  border-color: var(--ink);
+  background: var(--card-bg);
+}
+
+.header-btn.active {
+  color: var(--accent-slate);
+  border-color: var(--accent-slate);
+  background: rgba(90, 107, 122, 0.06);
+}
+
+.header-btn svg {
+  opacity: 0.7;
+}
+
+.header-btn-count {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--accent-slate);
+  background: rgba(90, 107, 122, 0.1);
+  padding: 1px 6px;
+  border-radius: 3px;
+  min-width: 18px;
+  text-align: center;
+}
+
+/* ---- Bookmarks section ---- */
+.bookmarks-section {
+  margin-top: 40px;
+  padding-top: 8px;
+  animation: fadeUp 0.35s ease both;
+}
+
+.bookmarks-section .section-header {
+  margin-bottom: 20px;
+}
+
+/* ---- Bookmark folder card ---- */
+.bookmark-folder-card {
+  cursor: default;
+}
+
+.bookmark-folder-card .status-bar {
+  display: block;
+  height: 3px;
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+}
+
+/* Override the default ::before bar for bookmark cards */
+.bookmark-folder-card::before {
+  display: none;
+}
+
+/* ---- Bookmark chips — same as page-chip but no close actions ---- */
+.bookmark-chips .page-chip {
+  cursor: pointer;
+}
+
+.bookmark-chips .page-chip:hover {
+  background: rgba(90, 107, 122, 0.04);
+}
+
+/* Domain URL shown next to bookmark title */
+.bm-url {
+  font-size: 11px;
+  color: var(--muted);
+  opacity: 0.6;
+  flex-shrink: 0;
+  max-width: 180px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  margin-left: auto;
+  display: none;
+}
+
+.bookmark-chips .page-chip:hover .bm-url {
+  display: block;
+}
+
+/* ---- Bookmark search ---- */
+.bookmark-search {
+  font-family: 'DM Sans', sans-serif;
+  font-size: 12px;
+  padding: 6px 12px;
+  border: 1px solid var(--warm-gray);
+  border-radius: 6px;
+  background: var(--card-bg);
+  color: var(--ink);
+  outline: none;
+  transition: border-color 0.2s;
+  width: 220px;
+}
+
+.bookmark-search:focus {
+  border-color: var(--accent-slate);
+}
+
+.bookmark-search::placeholder {
+  color: var(--muted);
+}
+
+/* ---- Empty state ---- */
+.bookmarks-empty {
+  font-size: 13px;
+  color: var(--muted);
+  font-style: italic;
+  padding: 32px 0;
+  text-align: center;
+}
+
+/* ---- Responsive: stack header on narrow screens ---- */
+@media (max-width: 600px) {
+  header {
+    flex-direction: column;
+    gap: 12px;
+  }
+  .bookmark-search {
+    width: 100%;
+  }
+}

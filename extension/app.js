@@ -1477,6 +1477,219 @@ document.addEventListener('input', async (e) => {
 
 
 /* ----------------------------------------------------------------
+   BOOKMARKS — Event Handlers
+   ---------------------------------------------------------------- */
+
+// ---- Toggle bookmarks section ----
+document.addEventListener('click', async (e) => {
+  const actionEl = e.target.closest('[data-action]');
+  if (!actionEl) return;
+  const action = actionEl.dataset.action;
+
+  if (action === 'toggle-bookmarks') {
+    const section = document.getElementById('bookmarksSection');
+    if (!section) return;
+    const isHidden = section.style.display === 'none';
+    section.style.display = isHidden ? 'block' : 'none';
+    actionEl.classList.toggle('active', isHidden);
+    if (isHidden) await renderBookmarks();
+    return;
+  }
+
+  if (action === 'open-bookmark') {
+    const url = actionEl.dataset.bmUrl;
+    if (url) {
+      chrome.tabs.create({ url, active: false });
+      showToast('Opened bookmark');
+    }
+    return;
+  }
+
+  if (action === 'open-bookmark-folder') {
+    const folderId = actionEl.dataset.bmFolderId;
+    if (!folderId) return;
+    try {
+      const children = await chrome.bookmarks.getChildren(folderId);
+      const urls = children.filter(c => c.url).map(c => c.url);
+      for (const url of urls) {
+        chrome.tabs.create({ url, active: false });
+      }
+      showToast(`Opened ${urls.length} bookmark${urls.length !== 1 ? 's' : ''}`);
+    } catch (err) {
+      console.warn('[tab-out] Could not open folder:', err);
+      showToast('Failed to open bookmarks');
+    }
+    return;
+  }
+});
+
+// ---- Bookmark search ----
+document.addEventListener('input', async (e) => {
+  if (e.target.id !== 'bookmarkSearch') return;
+  await renderBookmarks();
+});
+
+
+/* ----------------------------------------------------------------
+   BOOKMARKS — Chrome Bookmarks Integration
+
+   Reads and displays the user's Chrome bookmarks directly from
+   the chrome.bookmarks API. Folders are rendered as cards matching
+   the domain card design, with bookmark items as clickable chips.
+   ---------------------------------------------------------------- */
+
+/**
+ * fetchBookmarkTree()
+ *
+ * Fetches the full Chrome bookmark tree via the bookmarks API.
+ */
+async function fetchBookmarkTree() {
+  try {
+    return await chrome.bookmarks.getTree();
+  } catch (err) {
+    console.warn('[tab-out] Could not access bookmarks:', err);
+    return null;
+  }
+}
+
+/**
+ * collectBookmarks(nodes, result)
+ *
+ * Recursively collects all bookmark URLs from a node list.
+ */
+function collectBookmarks(nodes, result) {
+  if (!nodes) return;
+  for (const node of nodes) {
+    if (node.url) {
+      result.push({ id: node.id, title: node.title || node.url, url: node.url });
+    }
+    if (node.children) {
+      collectBookmarks(node.children, result);
+    }
+  }
+}
+
+/**
+ * getBookmarkFolders()
+ *
+ * Returns top-level bookmark folders (Bookmark Bar, Other Bookmarks, etc.)
+ * each with their recursively-collected bookmark items.
+ */
+async function getBookmarkFolders() {
+  const tree = await fetchBookmarkTree();
+  if (!tree || !tree[0] || !tree[0].children) return [];
+
+  const folders = [];
+  for (const node of tree[0].children) {
+    if (node.children) {
+      const items = [];
+      collectBookmarks(node.children, items);
+      folders.push({ id: node.id, title: node.title || 'Bookmarks', items });
+    }
+  }
+  return folders;
+}
+
+/**
+ * searchBookmarksInFolders(folders, query)
+ *
+ * Filters folders to only items matching the query (case-insensitive).
+ */
+function searchBookmarksInFolders(folders, query) {
+  if (!query || query.length < 2) return folders;
+  const q = query.toLowerCase();
+  return folders.map(f => ({
+    ...f,
+    items: f.items.filter(i =>
+      (i.title || '').toLowerCase().includes(q) || (i.url || '').toLowerCase().includes(q)
+    ),
+  })).filter(f => f.items.length > 0);
+}
+
+/**
+ * renderBookmarks()
+ *
+ * Main render function — fetches bookmark data, optionally filters
+ * by search query, and renders folder cards with bookmark chips.
+ */
+async function renderBookmarks() {
+  const container = document.getElementById('bookmarksContainer');
+  const empty = document.getElementById('bookmarksEmpty');
+  const searchInput = document.getElementById('bookmarkSearch');
+  const countEl = document.getElementById('bookmarkCount');
+  if (!container) return;
+
+  const query = searchInput ? searchInput.value.trim() : '';
+
+  try {
+    let folders = await getBookmarkFolders();
+    if (query.length >= 2) {
+      folders = searchBookmarksInFolders(folders, query);
+    }
+
+    const totalItems = folders.reduce((sum, f) => sum + f.items.length, 0);
+    if (countEl) countEl.textContent = totalItems > 0 ? String(totalItems) : '';
+
+    if (folders.length === 0 || totalItems === 0) {
+      container.innerHTML = '';
+      if (empty) empty.style.display = 'block';
+      return;
+    }
+
+    if (empty) empty.style.display = 'none';
+    container.innerHTML = folders.map(f => renderBookmarkFolder(f)).join('');
+  } catch (err) {
+    console.warn('[tab-out] Could not render bookmarks:', err);
+    container.innerHTML = '<div style="padding:24px;text-align:center;color:var(--muted);font-size:13px;">Could not load bookmarks.</div>';
+  }
+}
+
+function renderBookmarkFolder(folder) {
+  const itemCount = folder.items.length;
+  const chips = folder.items.map(item => renderBookmarkItem(item)).join('');
+
+  return `
+    <div class="mission-card bookmark-folder-card" data-bm-folder-id="bm-${folder.id}">
+      <div class="status-bar" style="background:var(--accent-slate);"></div>
+      <div class="mission-content">
+        <div class="mission-top">
+          <span class="mission-name">${folder.title}</span>
+          <span class="open-tabs-badge" style="color:var(--accent-slate);background:rgba(90,107,122,0.08);">
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" width="10" height="10"><path stroke-linecap="round" stroke-linejoin="round" d="M17.593 3.322c1.1.128 1.907 1.077 1.907 2.185V21L12 17.25 4.5 21V5.507c0-1.108.806-2.057 1.907-2.185a48.507 48.507 0 0 1 11.186 0Z" /></svg>
+            ${itemCount} bookmark${itemCount !== 1 ? 's' : ''}
+          </span>
+        </div>
+        <div class="mission-pages bookmark-chips">${chips}</div>
+        <div class="actions">
+          <button class="action-btn save-tabs" data-action="open-bookmark-folder" data-bm-folder-id="${folder.id}">
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" width="12" height="12"><path stroke-linecap="round" stroke-linejoin="round" d="M4.5 19.5l15-15m0 0H8.25m11.25 0v11.25" /></svg>
+            Open all ${itemCount}
+          </button>
+        </div>
+      </div>
+      <div class="mission-meta">
+        <div class="mission-page-count">${itemCount}</div>
+        <div class="mission-page-label">bookmarks</div>
+      </div>
+    </div>`;
+}
+
+function renderBookmarkItem(item) {
+  let domain = '';
+  try { domain = new URL(item.url).hostname; } catch {}
+  const faviconUrl = domain ? `https://www.google.com/s2/favicons?domain=${domain}&sz=16` : '';
+  const safeUrl = (item.url || '').replace(/"/g, '&quot;');
+  const safeTitle = (item.title || '').replace(/"/g, '&quot;');
+
+  return `<div class="page-chip clickable" data-action="open-bookmark" data-bm-url="${safeUrl}" title="${safeTitle}">
+    ${faviconUrl ? `<img class="chip-favicon" src="${faviconUrl}" alt="" onerror="this.style.display='none'">` : ''}
+    <span class="chip-text">${safeTitle}</span>
+    <span class="bm-url">${domain || item.url}</span>
+  </div>`;
+}
+
+
+/* ----------------------------------------------------------------
    INITIALIZE
    ---------------------------------------------------------------- */
 renderDashboard();
