@@ -1503,12 +1503,6 @@ document.addEventListener('input', async (e) => {
   }
 });
 
-// ---- Bookmark search ----
-document.addEventListener('input', async (e) => {
-  if (e.target.id !== 'bookmarkSearch') return;
-  await renderBookmarks();
-});
-
 
 /* ----------------------------------------------------------------
    BOOKMARKS — App-Grid Layout
@@ -1594,7 +1588,6 @@ async function saveBookmarkOrder(ids) {
 async function renderBookmarks() {
   const container = document.getElementById('bookmarksContainer');
   const empty = document.getElementById('bookmarksEmpty');
-  const searchInput = document.getElementById('bookmarkSearch');
   const section = document.getElementById('bookmarksSection');
   if (!container) return;
 
@@ -1604,17 +1597,8 @@ async function renderBookmarks() {
     section.classList.toggle('collapsed', bookmarksCollapsed);
   }
 
-  const query = searchInput ? searchInput.value.trim() : '';
-
   try {
-    let bookmarks = await getAllBookmarks();
-
-    if (query.length >= 2) {
-      const q = query.toLowerCase();
-      bookmarks = bookmarks.filter(b =>
-        (b.title || '').toLowerCase().includes(q) || (b.url || '').toLowerCase().includes(q)
-      );
-    }
+    const bookmarks = await getAllBookmarks();
 
     if (bookmarks.length === 0) {
       container.innerHTML = '';
@@ -1765,6 +1749,54 @@ document.addEventListener('drop', async (e) => {
 
 
 /* ----------------------------------------------------------------
+   THEME MANAGEMENT — System / Light / Dark toggle
+   ---------------------------------------------------------------- */
+
+/**
+ * getEffectiveTheme()
+ *
+ * Returns 'light' or 'dark' based on the stored preference.
+ * 'system' mode delegates to prefers-color-scheme.
+ */
+async function getEffectiveTheme() {
+  const { theme = 'system' } = await chrome.storage.local.get('theme');
+  if (theme === 'light') return 'light';
+  if (theme === 'dark') return 'dark';
+  // system mode — follow OS preference
+  return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+}
+
+/**
+ * applyTheme()
+ *
+ * Reads the stored theme preference and applies the 'dark' class to body.
+ * Also updates the select value.
+ */
+async function applyTheme() {
+  const { theme = 'system' } = await chrome.storage.local.get('theme');
+  const effective = await getEffectiveTheme();
+
+  document.body.classList.toggle('dark', effective === 'dark');
+
+  const select = document.getElementById('themeSelect');
+  if (select) select.value = theme;
+}
+
+// Listen for system color scheme changes (only matters in 'system' mode)
+window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
+  applyTheme();
+});
+
+// Theme select change — sets theme directly
+document.addEventListener('change', async (e) => {
+  if (e.target.id !== 'themeSelect') return;
+  await chrome.storage.local.set({ theme: e.target.value });
+  await applyTheme();
+});
+
+
+/* ----------------------------------------------------------------
    INITIALIZE
    ---------------------------------------------------------------- */
+applyTheme();
 renderDashboard();
