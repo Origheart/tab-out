@@ -1253,6 +1253,11 @@ footer { animation: fadeUp 0.5s ease 0.65s both; }
   cursor: pointer;
 }
 
+#bookmarksToggleBtn {
+  width: auto;
+  flex-shrink: 0;
+}
+
 /* ---- Bookmark tile grid ---- */
 .bookmark-grid {
   display: grid;
