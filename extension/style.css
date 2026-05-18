@@ -1253,6 +1253,11 @@ footer { animation: fadeUp 0.5s ease 0.65s both; }
   cursor: pointer;
 }
 
+#bookmarksToggleBtn {
+  width: auto;
+  flex-shrink: 0;
+}
+
 /* ---- Bookmark tile grid ---- */
 .bookmark-grid {
   display: grid;
@@ -1407,6 +1412,98 @@ footer { animation: fadeUp 0.5s ease 0.65s both; }
   font-style: italic;
   padding: 32px 0;
   text-align: center;
+}
+
+/* ---- New Folder button ---- */
+.bookmark-folder-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--warm-gray);
+  background: var(--card-bg);
+  color: var(--muted);
+  font-family: 'DM Sans', sans-serif;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: border-color 0.15s, color 0.15s, background 0.15s;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.bookmark-folder-btn:hover {
+  border-color: var(--accent-slate);
+  color: var(--ink);
+  background: rgba(90, 107, 122, 0.04);
+}
+
+/* ---- Inline folder section ---- */
+.bookmark-folder-section {
+  grid-column: 1 / -1;
+}
+
+.bookmark-folder-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background 0.15s;
+  user-select: none;
+}
+
+.bookmark-folder-header:hover {
+  background: rgba(90, 107, 122, 0.05);
+}
+
+.bm-folder-chevron {
+  width: 12px;
+  height: 12px;
+  flex-shrink: 0;
+  color: var(--muted);
+  transition: transform 0.2s;
+}
+
+.bm-folder-name {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.bm-folder-count {
+  font-size: 12px;
+  color: var(--muted);
+  margin-left: auto;
+  white-space: nowrap;
+}
+
+.bookmark-folder-body {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 24px;
+  padding: 8px 0 8px 16px;
+  margin-bottom: 4px;
+}
+
+/* Level-based indentation for nested folders */
+.level-1 .bookmark-folder-body { padding-left: 20px; }
+.level-2 .bookmark-folder-body { padding-left: 36px; }
+.level-3 .bookmark-folder-body { padding-left: 52px; }
+.level-4 .bookmark-folder-body { padding-left: 68px; }
+.level-5 .bookmark-folder-body { padding-left: 84px; }
+
+.bm-folder-empty {
+  font-size: 12px;
+  color: var(--muted);
+  font-style: italic;
+  padding: 12px 0;
+  grid-column: 1 / -1;
 }
 
 /* ---- Responsive ---- */
