@@ -1459,6 +1459,23 @@ document.addEventListener('click', async (e) => {
     }
     return;
   }
+
+  // ---- Create bookmark folder ----
+  if (action === 'create-bookmark-folder') {
+    e.stopPropagation();
+    const name = prompt('Enter a name for the new folder:');
+    if (!name || !name.trim()) return;
+    try {
+      // Always create at the Bookmarks Bar root
+      await chrome.bookmarks.create({ parentId: '1', title: name.trim() });
+      showToast('Folder created');
+      await renderBookmarks();
+    } catch (err) {
+      console.warn('[tab-out] Could not create folder:', err);
+      showToast('Failed to create folder');
+    }
+    return;
+  }
 });
 
 // ---- Archive toggle — expand/collapse the archive section ----
@@ -1505,11 +1522,14 @@ document.addEventListener('input', async (e) => {
 
 
 /* ----------------------------------------------------------------
-   BOOKMARKS — App-Grid Layout
+   BOOKMARKS — App-Grid Layout with Expandable Folder Sections
 
-   All bookmarks flattened into individual tiles displayed in a
-   responsive grid, like app icons on a home screen. Supports
-   drag-and-drop reordering with custom order persisted to storage.
+   Folders are rendered as inline expandable/collapsible sections
+   within the bookmark grid. Default expanded. State is persisted
+   to chrome.storage.local so it survives page reloads.
+
+   Drag-and-drop: reorder bookmarks within the same parent context.
+   Folder creation is supported via the "New Folder" button.
    ---------------------------------------------------------------- */
 
 /**
@@ -1527,47 +1547,76 @@ async function fetchBookmarkTree() {
 }
 
 /**
- * collectBookmarks(nodes, result)
+ * getRootBookmarkItems()
  *
- * Recursively collects all bookmark URLs from a node list into result.
+ * Returns top-level items from Bookmarks Bar and Other Bookmarks,
+ * combining them into a single array. Each item has:
+ * { id, title, url (or null for folders), isFolder, children, dateAdded }.
  */
-function collectBookmarks(nodes, result) {
-  if (!nodes) return;
-  for (const node of nodes) {
-    if (node.url) {
-      result.push({ id: node.id, title: node.title || node.url, url: node.url });
+async function getRootBookmarkItems() {
+  const tree = await fetchBookmarkTree();
+  if (!tree || !tree[0] || !tree[0].children) return [];
+
+  const items = [];
+  for (const top of tree[0].children) {
+    if (top.id === '3') continue; // skip "Mobile Bookmarks"/synced
+    if (top.children) {
+      for (const child of top.children) {
+        const isFolder = !child.url && !!child.children;
+        items.push({
+          id: child.id,
+          title: child.title || (isFolder ? 'Untitled folder' : 'Untitled'),
+          url: child.url || null,
+          isFolder,
+          children: child.children || null,
+          dateAdded: child.dateAdded,
+        });
+      }
     }
-    if (node.children) {
-      collectBookmarks(node.children, result);
-    }
+  }
+
+  // Apply custom order for bookmark items
+  const { bookmarkOrder = [] } = await chrome.storage.local.get('bookmarkOrder');
+  if (bookmarkOrder.length > 0) {
+    const bookmarks = items.filter(i => !i.isFolder);
+    const folders = items.filter(i => i.isFolder);
+    const idx = new Map(bookmarkOrder.map((id, i) => [id, i]));
+    const ordered = bookmarks.filter(b => idx.has(b.id)).sort((a, b) => idx.get(a.id) - idx.get(b.id));
+    const unordered = bookmarks.filter(b => !idx.has(b.id));
+    return [...folders, ...ordered, ...unordered];
+  }
+
+  return items;
+}
+
+/**
+ * getFolderStates()
+ *
+ * Reads folder expand/collapse states from storage.
+ * Missing folders default to expanded (true).
+ */
+async function getFolderStates() {
+  try {
+    const { bookmarkFolderStates = {} } = await chrome.storage.local.get('bookmarkFolderStates');
+    return bookmarkFolderStates;
+  } catch {
+    return {};
   }
 }
 
 /**
- * getAllBookmarks()
+ * saveFolderState(folderId, expanded)
  *
- * Flattens the entire bookmark tree into a single array of { id, title, url },
- * then applies any user-defined custom order from chrome.storage.local.
+ * Persists a single folder's expand/collapse state.
  */
-async function getAllBookmarks() {
-  const tree = await fetchBookmarkTree();
-  if (!tree || !tree[0] || !tree[0].children) return [];
-
-  const all = [];
-  for (const node of tree[0].children) {
-    if (node.children) collectBookmarks(node.children, all);
+async function saveFolderState(folderId, expanded) {
+  try {
+    const { bookmarkFolderStates = {} } = await chrome.storage.local.get('bookmarkFolderStates');
+    bookmarkFolderStates[folderId] = expanded;
+    await chrome.storage.local.set({ bookmarkFolderStates });
+  } catch (err) {
+    console.warn('[tab-out] Could not save folder state:', err);
   }
-
-  // Apply custom drag-reorder from storage
-  const { bookmarkOrder = [] } = await chrome.storage.local.get('bookmarkOrder');
-  if (bookmarkOrder.length > 0) {
-    const idx = new Map(bookmarkOrder.map((id, i) => [id, i]));
-    const ordered = all.filter(b => idx.has(b.id)).sort((a, b) => idx.get(a.id) - idx.get(b.id));
-    const unordered = all.filter(b => !idx.has(b.id));
-    return [...ordered, ...unordered];
-  }
-
-  return all;
 }
 
 /**
@@ -1582,8 +1631,8 @@ async function saveBookmarkOrder(ids) {
 /**
  * renderBookmarks()
  *
- * Main render — fetches all bookmarks, filters by search query,
- * renders as a grid of draggable tiles.
+ * Main render — fetches root bookmark items, renders folders as
+ * expandable sections (with their children inline) and bookmarks as tiles.
  */
 async function renderBookmarks() {
   const container = document.getElementById('bookmarksContainer');
@@ -1598,16 +1647,27 @@ async function renderBookmarks() {
   }
 
   try {
-    const bookmarks = await getAllBookmarks();
+    const items = await getRootBookmarkItems();
+    const folderStates = await getFolderStates();
 
-    if (bookmarks.length === 0) {
+    if (items.length === 0) {
       container.innerHTML = '';
-      if (empty) empty.style.display = 'block';
+      if (empty) {
+        empty.style.display = 'block';
+        empty.textContent = 'No bookmarks found.';
+      }
       return;
     }
 
     if (empty) empty.style.display = 'none';
-    container.innerHTML = bookmarks.map(b => renderBookmarkTile(b)).join('');
+
+    const folders = items.filter(i => i.isFolder);
+    const bookmarks = items.filter(i => !i.isFolder);
+
+    const foldersHtml = folders.map(f => renderFolderSection(f, folderStates, 0)).join('');
+    const bookmarksHtml = bookmarks.map(b => renderBookmarkTile(b)).join('');
+
+    container.innerHTML = foldersHtml + bookmarksHtml;
   } catch (err) {
     console.warn('[tab-out] Could not render bookmarks:', err);
     container.innerHTML = '<div style="padding:24px;text-align:center;color:var(--muted);font-size:13px;">Could not load bookmarks.</div>';
@@ -1639,6 +1699,65 @@ function renderBookmarkTile(bm) {
   </div>`;
 }
 
+/**
+ * renderFolderSection(folder, folderStates, level)
+ *
+ * Recursively renders a folder as an expandable/collapsible section
+ * with its children (bookmark tiles + sub-folder sections) inside.
+ */
+function renderFolderSection(folder, folderStates, level) {
+  const expanded = folderStates[folder.id] !== false; // default expanded
+  const safeTitle = (folder.title || '').replace(/"/g, '&quot;');
+  const count = folder.children ? folder.children.filter(c => c.url).length : 0;
+  const subfolderCount = folder.children ? folder.children.filter(c => !c.url).length : 0;
+
+  // Build child HTML
+  let childrenHtml = '';
+  if (folder.children && folder.children.length > 0) {
+    const childFolders = [];
+    const childBookmarks = [];
+    for (const child of folder.children) {
+      const isFolder = !child.url && !!child.children;
+      if (isFolder) {
+        childFolders.push({
+          id: child.id,
+          title: child.title || 'Untitled folder',
+          url: null,
+          isFolder: true,
+          children: child.children || null,
+        });
+      } else {
+        childBookmarks.push({
+          id: child.id,
+          title: child.title || child.url || 'Untitled',
+          url: child.url,
+          isFolder: false,
+        });
+      }
+    }
+    const foldersHtml = childFolders.map(f => renderFolderSection(f, folderStates, level + 1)).join('');
+    const bookmarksHtml = childBookmarks.map(b => renderBookmarkTile(b)).join('');
+    childrenHtml = foldersHtml + bookmarksHtml;
+  }
+
+  const bodyDisplay = expanded ? '' : 'display:none;';
+  const chevronDeg = expanded ? '0' : '-90';
+
+  const folderIcon = `<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" width="16" height="16"><path stroke-linecap="round" stroke-linejoin="round" d="M2.25 12.75V12A2.25 2.25 0 014.5 9.75h15A2.25 2.25 0 0121.75 12v.75m-8.69-6.44l-2.12-2.12a1.5 1.5 0 00-1.061-.44H4.5A2.25 2.25 0 002.25 6v12a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9a2.25 2.25 0 00-2.25-2.25h-5.379a1.5 1.5 0 01-1.06-.44z" /></svg>`;
+
+  return `<div class="bookmark-folder-section level-${level}" data-folder-id="${folder.id}">
+    <div class="bookmark-folder-header" data-action="toggle-folder" data-folder-id="${folder.id}" title="${safeTitle}">
+      <svg class="bm-folder-chevron" style="transform:rotate(${chevronDeg}deg)" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" width="12" height="12"><path stroke-linecap="round" stroke-linejoin="round" d="m19.5 8.25-7.5 7.5-7.5-7.5" /></svg>
+      ${folderIcon}
+      <span class="bm-folder-name">${safeTitle}</span>
+      <span class="bm-folder-count">${count} bookmark${count !== 1 ? 's' : ''}${subfolderCount > 0 ? `, ${subfolderCount} folder${subfolderCount !== 1 ? 's' : ''}` : ''}</span>
+    </div>
+    <div class="bookmark-folder-body" style="${bodyDisplay}">
+      ${childrenHtml || '<div class="bm-folder-empty">Empty</div>'}
+    </div>
+  </div>`;
+}
+
 
 /* ----------------------------------------------------------------
    BOOKMARKS — Section Toggle (Collapse / Expand)
@@ -1648,6 +1767,9 @@ function renderBookmarkTile(bm) {
    ---------------------------------------------------------------- */
 
 document.addEventListener('click', async (e) => {
+  // Don't toggle when clicking inside the New Folder button
+  if (e.target.closest('[data-action="create-bookmark-folder"]')) return;
+
   const toggle = e.target.closest('#bookmarksSectionToggle, #bookmarksToggleBtn, #bookmarksChevron');
   if (!toggle) return;
 
@@ -1657,13 +1779,31 @@ document.addEventListener('click', async (e) => {
   const isCollapsed = section.classList.toggle('collapsed');
   await chrome.storage.local.set({ bookmarksCollapsed: isCollapsed });
 
-  // If expanding for the first time, ensure bookmarks are rendered
   if (!isCollapsed) {
     const container = document.getElementById('bookmarksContainer');
-    if (container && container.children.length === 0) {
+    if (container) {
       await renderBookmarks();
     }
   }
+});
+
+// ---- Toggle folder expand/collapse ----
+document.addEventListener('click', async (e) => {
+  const header = e.target.closest('[data-action="toggle-folder"]');
+  if (!header) return;
+  const folderId = header.dataset.folderId;
+  if (!folderId) return;
+  const section = header.closest('.bookmark-folder-section');
+  if (!section) return;
+  const body = section.querySelector('.bookmark-folder-body');
+  const chevron = section.querySelector('.bm-folder-chevron');
+  if (!body) return;
+  const isExpanded = body.style.display !== 'none';
+  body.style.display = isExpanded ? 'none' : '';
+  if (chevron) {
+    chevron.style.transform = isExpanded ? 'rotate(-90deg)' : 'rotate(0deg)';
+  }
+  await saveFolderState(folderId, !isExpanded);
 });
 
 
@@ -1671,7 +1811,8 @@ document.addEventListener('click', async (e) => {
    BOOKMARKS — Drag-and-Drop Reorder
 
    Uses HTML5 Drag & Drop API with event delegation.
-   Order is persisted to chrome.storage.local on each drop.
+   Order is persisted via bookmarkOrder (root level) or
+   chrome.bookmarks.move (inside folder sections).
    ---------------------------------------------------------------- */
 
 let bmDrag = false;
@@ -1686,7 +1827,6 @@ document.addEventListener('dragstart', (e) => {
 });
 
 document.addEventListener('dragend', () => {
-  // Reset flag after a tick so any queued click sees it
   setTimeout(() => { bmDrag = false; }, 0);
   document.querySelectorAll('.bookmark-tile').forEach(t => {
     t.classList.remove('dragging', 'drag-over', 'drag-over-before', 'drag-over-after');
@@ -1694,23 +1834,24 @@ document.addEventListener('dragend', () => {
 });
 
 document.addEventListener('dragover', (e) => {
-  const tile = e.target.closest('.bookmark-tile');
-  if (!tile) return;
+  // Allow drop anywhere inside the bookmarks container (between tiles, edges)
+  const grid = document.getElementById('bookmarksContainer');
+  if (!grid || !grid.contains(e.target)) return;
   e.preventDefault();
   e.dataTransfer.dropEffect = 'move';
-  const grid = document.getElementById('bookmarksContainer');
-  if (!grid) return;
 
-  grid.querySelectorAll('.bookmark-tile').forEach(t => t.classList.remove('drag-over'));
+  // Clear previous indicators
+  grid.querySelectorAll('.bookmark-tile').forEach(t => t.classList.remove('drag-over', 'drag-over-before', 'drag-over-after'));
 
+  const tile = e.target.closest('.bookmark-tile');
+  if (!tile) return;
+
+  // Show insert-before/after indicator on the nearest tile
   const rect = tile.getBoundingClientRect();
-  const midY = rect.top + rect.height / 2;
   const midX = rect.left + rect.width / 2;
-  const cx = e.clientX, cy = e.clientY;
+  const cx = e.clientX;
 
-  // Determine which side to insert based on cursor position
-  const isAfter = (cx > midX) || (Math.abs(cx - midX) < 10 && cy > midY);
-  if (isAfter) {
+  if (cx > midX) {
     tile.classList.add('drag-over-after');
   } else {
     tile.classList.add('drag-over-before');
@@ -1718,33 +1859,85 @@ document.addEventListener('dragover', (e) => {
 });
 
 document.addEventListener('drop', async (e) => {
-  const tile = e.target.closest('.bookmark-tile');
-  if (!tile) return;
+  const grid = document.getElementById('bookmarksContainer');
+  if (!grid || !grid.contains(e.target)) return;
   e.preventDefault();
 
   const draggedId = e.dataTransfer.getData('text/plain');
-  const targetId = tile.dataset.bmId;
-  if (!draggedId || draggedId === targetId) return;
-
-  const grid = document.getElementById('bookmarksContainer');
-  if (!grid) return;
+  if (!draggedId) return;
 
   const draggedTile = grid.querySelector(`[data-bm-id="${draggedId}"]`);
   if (!draggedTile) return;
 
-  const rect = tile.getBoundingClientRect();
-  const midX = rect.left + rect.width / 2;
-  const isAfter = e.clientX > midX || (Math.abs(e.clientX - midX) < 10 && e.clientY > rect.top + rect.height / 2);
+  // Clear drag indicators
+  grid.querySelectorAll('.bookmark-tile').forEach(t =>
+    t.classList.remove('drag-over', 'drag-over-before', 'drag-over-after'));
 
-  if (isAfter) {
-    tile.parentNode.insertBefore(draggedTile, tile.nextSibling);
+  // Capture source context BEFORE DOM manipulation
+  const sourceSection = draggedTile.closest('.bookmark-folder-section');
+  const sourceParentId = sourceSection ? sourceSection.dataset.folderId : null;
+
+  // Determine target context and insertion point
+  const tile = e.target.closest('.bookmark-tile');
+  const targetSection = tile
+    ? tile.closest('.bookmark-folder-section')
+    : e.target.closest('.bookmark-folder-section');
+  const targetParentId = targetSection ? targetSection.dataset.folderId : null;
+
+  // Perform DOM move
+  if (tile && draggedId !== tile.dataset.bmId) {
+    const rect = tile.getBoundingClientRect();
+    const midX = rect.left + rect.width / 2;
+    const isAfter = e.clientX > midX || (Math.abs(e.clientX - midX) < 10 && e.clientY > rect.top + rect.height / 2);
+    if (isAfter) {
+      tile.parentNode.insertBefore(draggedTile, tile.nextSibling);
+    } else {
+      tile.parentNode.insertBefore(draggedTile, tile);
+    }
   } else {
-    tile.parentNode.insertBefore(draggedTile, tile);
+    // Dropping on empty area or same tile — append to target container
+    const container = targetSection
+      ? targetSection.querySelector('.bookmark-folder-body')
+      : grid;
+    container.appendChild(draggedTile);
   }
 
-  // Save the new order
-  const newOrder = [...grid.querySelectorAll('.bookmark-tile')].map(t => t.dataset.bmId);
-  await saveBookmarkOrder(newOrder);
+  // Calculate new index in the target container
+  const targetContainer = targetSection
+    ? targetSection.querySelector('.bookmark-folder-body')
+    : grid;
+  const siblings = [...targetContainer.querySelectorAll(':scope > .bookmark-tile')];
+  const newIndex = siblings.indexOf(draggedTile);
+
+  if (sourceParentId !== targetParentId) {
+    // Moving between different contexts (folder ↔ root or folder ↔ folder)
+    const parentId = targetParentId || '1'; // '1' = Bookmarks Bar root
+    try {
+      await chrome.bookmarks.move(draggedId, { parentId, index: Math.max(0, newIndex) });
+    } catch (err) {
+      console.warn('[tab-out] Could not move bookmark:', err);
+    }
+  } else if (targetParentId) {
+    // Reordering within the same folder
+    if (newIndex >= 0) {
+      try {
+        await chrome.bookmarks.move(draggedId, { parentId: targetParentId, index: newIndex });
+      } catch (err) {
+        console.warn('[tab-out] Could not reorder bookmark:', err);
+      }
+    }
+  } else {
+    // Reordering at root level
+    const newOrder = [...grid.querySelectorAll(':scope > .bookmark-tile')]
+      .map(t => t.dataset.bmId)
+      .filter(Boolean);
+    if (newOrder.length > 0) {
+      await saveBookmarkOrder(newOrder);
+    }
+  }
+
+  // Re-render to update folder counts and ensure consistency
+  await renderBookmarks();
 });
 
 
